@@ -24,6 +24,87 @@ declare -A __OOB_OBJ_TABLE
 declare -A __OOB_ADDR_TABLE
 
 
+_create_var_mapper()
+{
+    local OBJ_NAME=$1
+    local VALUE_FIELD=${2-}
+    
+    eval ${OBJ_NAME}_$2=${VALUE_FIELD-}
+
+    local PREFIX=$(expr "${2-}" : '\(_*\)[a-zA-Z][a-zA-Z0-9_]*' || exit 0)
+    local VAR=$(expr "${2-}" : '_*\([a-zA-Z][a-zA-Z0-9_]*\)' || exit 0)
+
+    eval "$OBJ_NAME.${PREFIX-}${VAR}() { echo \"\$${OBJ_NAME}_$2\"; }"
+    eval "$OBJ_NAME.${PREFIX-}${VAR}=() { ${OBJ_NAME}_$2=\$1; }"
+}
+
+_ArrayMapper=(
+    function __new__
+
+    function +=
+#    function remove
+    function size
+)
+
+_ArrayMapper::__new__()
+{
+    local self=$1
+    shift
+
+    eval ${self}__array=\(\)
+
+    local count=0
+    for i in "$@"; do
+        eval ${self}__array[$count]=\$i
+
+        (( ++count ))
+    done
+}
+
+_ArrayMapper::+=()
+{
+    local self=$1
+    shift
+
+    local new_index
+    new_index=$($self.size)
+
+    (( new_index < 0 )) && new_index=0
+
+    for i in "$@"; do
+        eval ${self}__array[$new_index]=\$i
+
+        (( ++new_index ))
+    done
+}
+
+_ArrayMapper::size()
+{
+    local self=$1
+    shift
+
+    eval echo \${#${self}__array[@]}
+}
+
+
+_create_array_mapper()
+{
+    local OBJ_NAME=$1
+    local VALUE_FIELD=${3-}
+
+    new _ArrayMapper m ${VALUE_FIELD-}
+
+    
+    #eval ${OBJ_NAME}_$2=\$m
+
+    local PREFIX=$(expr "${2-}" : '\(_*\)[a-zA-Z][a-zA-Z0-9_]*' || exit 0)
+    local VAR=$(expr "${2-}" : '_*\([a-zA-Z][a-zA-Z0-9_]*\)' || exit 0)
+
+    eval "$OBJ_NAME.${PREFIX-}${VAR}() { echo \"\${${m}__array[\$1]}\"; }"
+    eval "$OBJ_NAME.${PREFIX-}${VAR}+=() { $m.+= \"\$@\"; }"
+}
+
+
 # Create new object without registering it in the object table.
 
 # Arguments:
@@ -62,15 +143,19 @@ new_metaobject()
             [[ -z $VALUE_FIELD ]] && VALUE_FIELD=${CLASS}::$2
             eval "$OBJ_NAME.$2() { $VALUE_FIELD $OBJ_NAME \"\$@\"; }"
         elif [[ $1 = "declare" ]]; then
-            eval ${OBJ_NAME}_$2=$VALUE_FIELD
+            if [[ $2 = "-a" ]]; then
+                (( ++SHIFT ))
+                _create_array_mapper "${OBJ_NAME}" "$3" "$VALUE_FIELD"
+            else
+                _create_var_mapper "${OBJ_NAME}" "$2" "$VALUE_FIELD"
+            fi
+            # eval ${OBJ_NAME}_$2=$VALUE_FIELD
 
-            #set +e
-            PREFIX=$(expr "${2-}" : '\(_*\)[a-zA-Z][a-zA-Z0-9_]*' || exit 0)
-            VAR=$(expr "${2-}" : '_*\([a-zA-Z][a-zA-Z0-9_]*\)' || exit 0)
-            #set -e
+            # PREFIX=$(expr "${2-}" : '\(_*\)[a-zA-Z][a-zA-Z0-9_]*' || exit 0)
+            # VAR=$(expr "${2-}" : '_*\([a-zA-Z][a-zA-Z0-9_]*\)' || exit 0)
 
-            eval "$OBJ_NAME.${PREFIX-}${VAR}() { echo \"\$${OBJ_NAME}_$2\"; }"
-            eval "$OBJ_NAME.${PREFIX-}set_${VAR}() { ${OBJ_NAME}_$2=\$1; }"
+            # eval "$OBJ_NAME.${PREFIX-}${VAR}() { echo \"\$${OBJ_NAME}_$2\"; }"
+            # eval "$OBJ_NAME.${PREFIX-}set_${VAR}() { ${OBJ_NAME}_$2=\$1; }"
         else
             echo -e "oobash: Syntax error in class-field $CLASS_FIELDS in class $CLASS,
 \texpected function or declare keyword" >&2
