@@ -41,8 +41,9 @@ _create_var_mapper()
 _ArrayMapper=(
     function __new__
 
+    function get
     function +=
-#    function remove
+    function remove
     function size
 )
 
@@ -61,6 +62,14 @@ _ArrayMapper::__new__()
     done
 }
 
+_ArrayMapper::get()
+{
+    local self=$1
+    shift
+
+    eval echo \"\${${self}__array[$1]}\"
+}
+
 _ArrayMapper::+=()
 {
     local self=$1
@@ -76,6 +85,15 @@ _ArrayMapper::+=()
 
         (( ++new_index ))
     done
+}
+
+_ArrayMapper::remove()
+{
+    local self=$1
+    shift
+
+    eval unset ${self}__array[$1]
+    eval ${self}__array=\("\${${self}__array[@]}"\)
 }
 
 _ArrayMapper::size()
@@ -100,7 +118,7 @@ _create_array_mapper()
     local PREFIX=$(expr "${2-}" : '\(_*\)[a-zA-Z][a-zA-Z0-9_]*' || exit 0)
     local VAR=$(expr "${2-}" : '_*\([a-zA-Z][a-zA-Z0-9_]*\)' || exit 0)
 
-    eval "$OBJ_NAME.${PREFIX-}${VAR}() { echo \"\${${m}__array[\$1]}\"; }"
+    eval "$OBJ_NAME.${PREFIX-}${VAR}() { echo \"${m}\"; }"
     eval "$OBJ_NAME.${PREFIX-}${VAR}+=() { $m.+= \"\$@\"; }"
 }
 
