@@ -280,3 +280,6 @@ delete_all()
         done
     fi
 }
+
+# Make sure to delete all objects at end of program
+trap 'delete_all' TERM EXIT INT
